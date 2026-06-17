@@ -222,6 +222,12 @@ export const Financiamento: React.FC<Props> = ({ fin, finPagas, finAmorts, updat
           <div className="resumo-table">
             <div className="resumo-row"><span>Saldo devedor hoje</span><span style={{ fontWeight: 600 }}>{fmt(saldoAntes)}</span></div>
             <div className="resumo-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12, marginTop: 4 }}>
+              <span>Juros que pagaria sem amortizar</span><span className="val-red">{fmt(totalJurosSem)}</span>
+            </div>
+            <div className="resumo-row">
+              <span>Juros pagando {fmt(valor)}/mes extra</span><span className="val-green">{fmt(totalJurosCom)}</span>
+            </div>
+            <div className="resumo-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12, marginTop: 4 }}>
               <span>Sem amortizar, quita em</span><span>{mesesSem} meses ({(mesesSem / 12).toFixed(1)} anos) — {dataQuitSem}</span>
             </div>
             <div className="resumo-row">
