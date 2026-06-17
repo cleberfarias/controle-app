@@ -15,7 +15,7 @@ const defaultState: AppState = {
   beneficio: 0,
   comissao: 0,
   poupanca: 0,
-  pctInvest: 30,
+  investimento: 0,
   fixas: [],
   parcs: [],
   recs: [],
@@ -51,6 +51,11 @@ function migrateState(raw: any): AppState {
     delete r.recebido;
     return r;
   });
+
+  if (s.pctInvest !== undefined && s.investimento === undefined) {
+    s.investimento = 0;
+  }
+  delete s.pctInvest;
 
   return s as AppState;
 }
@@ -270,12 +275,13 @@ export function useFinanceData() {
   }, []);
 
   const entrada = state.salario + state.beneficio + state.comissao;
-  const invest = entrada * (state.pctInvest / 100);
+  const invest = state.investimento;
   const totFix = state.fixas.reduce((s, c) => s + c.valor, 0);
   const totParc = state.parcs.reduce((s, c) => s + meuValParc(c), 0);
   const totGast = totFix + totParc;
-  const passar = entrada - totGast - invest - state.poupanca;
+  const passar = entrada - totGast - invest;
   const totRec = state.recs.reduce((s, c) => s + c.p1 + c.p2, 0);
+  const poupancaTotal = state.poupanca + invest;
   const saudePct = entrada > 0 ? Math.min(100, Math.round(Math.max(0, passar / entrada) * 100)) : 0;
 
   return {
@@ -286,6 +292,6 @@ export function useFinanceData() {
     addFixa, removeFixa, updateFixa, toggleFixaPago,
     addParc, removeParc, updateParc, toggleParcPago,
     addRec, removeRec, updateRec, toggleRecRecebido,
-    computed: { entrada, invest, totFix, totParc, totGast, passar, totRec, saudePct },
+    computed: { entrada, invest, totFix, totParc, totGast, passar, totRec, poupancaTotal, saudePct },
   };
 }

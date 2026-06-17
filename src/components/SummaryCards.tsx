@@ -9,16 +9,16 @@ interface Props {
   totGast: number;
   invest: number;
   passar: number;
-  poupanca: number;
+  poupancaTotal: number;
   totRec: number;
 }
 
 const cards = [
   { key: 'entrada', label: 'Salario + Beneficio', icon: DollarSign, color: '#10b981', bg: 'rgba(16,185,129,0.08)', field: 'entrada' as const },
   { key: 'gastos', label: 'Total de Gastos', icon: TrendingDown, color: '#ef4444', bg: 'rgba(239,68,68,0.08)', field: 'totGast' as const },
-  { key: 'invest', label: 'Plano Invest.', icon: TrendingUp, color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', field: 'invest' as const },
+  { key: 'invest', label: 'Guardar no Mes', icon: TrendingUp, color: '#8b5cf6', bg: 'rgba(139,92,246,0.08)', field: 'invest' as const },
   { key: 'passar', label: 'Para o Mes', icon: Wallet, color: '#f59e0b', bg: 'rgba(245,158,11,0.08)', field: 'passar' as const },
-  { key: 'poupanca', label: 'Poupanca Pessoal', icon: PiggyBank, color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', field: 'poupanca' as const },
+  { key: 'poupanca', label: 'Poupanca Total', icon: PiggyBank, color: '#3b82f6', bg: 'rgba(59,130,246,0.08)', field: 'poupancaTotal' as const },
   { key: 'receber', label: 'A Receber', icon: ArrowDownToLine, color: '#14b8a6', bg: 'rgba(20,184,166,0.08)', field: 'totRec' as const },
 ];
 

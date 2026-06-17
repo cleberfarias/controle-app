@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, Landmark, PiggyBank } from 'lucide-react';
+import { TrendingUp, PiggyBank } from 'lucide-react';
 import { GlassCard } from './GlassCard';
 import { fmt } from '../hooks/useFinanceData';
 
@@ -10,11 +10,12 @@ interface Props {
   totFix: number;
   totParc: number;
   poupanca: number;
+  poupancaTotal: number;
   passar: number;
   saudePct: number;
 }
 
-export const Investimento: React.FC<Props> = ({ entrada, invest, totFix, totParc, poupanca, passar, saudePct }) => {
+export const Investimento: React.FC<Props> = ({ entrada, invest, totFix, totParc, poupanca, poupancaTotal, passar, saudePct }) => {
   const barColor = saudePct >= 30 ? '#10b981' : saudePct >= 10 ? '#f59e0b' : '#ef4444';
   const msgs = [
     'Atencao: sobra muito pouca margem!',
@@ -31,24 +32,24 @@ export const Investimento: React.FC<Props> = ({ entrada, invest, totFix, totParc
           <div className="invest-icon" style={{ background: 'rgba(139,92,246,0.12)' }}>
             <TrendingUp size={24} color="#8b5cf6" />
           </div>
-          <div className="invest-label">Total para investir</div>
+          <div className="invest-label">Guardar no mes</div>
           <div className="invest-value" style={{ color: '#8b5cf6' }}>{fmt(invest)}</div>
         </GlassCard>
 
         <GlassCard delay={0.2} className="invest-card">
-          <div className="invest-icon" style={{ background: 'rgba(123,31,162,0.12)' }}>
-            <Landmark size={24} color="#7b1fa2" />
-          </div>
-          <div className="invest-label">Consorcio (50%)</div>
-          <div className="invest-value" style={{ color: '#7b1fa2' }}>{fmt(invest / 2)}</div>
-        </GlassCard>
-
-        <GlassCard delay={0.3} className="invest-card">
           <div className="invest-icon" style={{ background: 'rgba(59,130,246,0.12)' }}>
             <PiggyBank size={24} color="#3b82f6" />
           </div>
-          <div className="invest-label">Poupanca invest. (50%)</div>
-          <div className="invest-value" style={{ color: '#3b82f6' }}>{fmt(invest / 2)}</div>
+          <div className="invest-label">Poupanca atual</div>
+          <div className="invest-value" style={{ color: '#3b82f6' }}>{fmt(poupanca)}</div>
+        </GlassCard>
+
+        <GlassCard delay={0.3} className="invest-card">
+          <div className="invest-icon" style={{ background: 'rgba(16,185,129,0.12)' }}>
+            <PiggyBank size={24} color="#10b981" />
+          </div>
+          <div className="invest-label">Poupanca + investimento</div>
+          <div className="invest-value" style={{ color: '#10b981' }}>{fmt(poupancaTotal)}</div>
         </GlassCard>
       </div>
 
@@ -73,12 +74,8 @@ export const Investimento: React.FC<Props> = ({ entrada, invest, totFix, totParc
             <span className="val-red">{fmt(totParc)}</span>
           </div>
           <div className="resumo-row">
-            <span>(-) Plano de investimento</span>
+            <span>(-) Guardar no mes</span>
             <span className="val-purple">{fmt(invest)}</span>
-          </div>
-          <div className="resumo-row">
-            <span>(-) Poupanca pessoal</span>
-            <span className="val-blue">{fmt(poupanca)}</span>
           </div>
           <div className="resumo-row resumo-total">
             <span>Para passar o mes</span>
@@ -91,6 +88,11 @@ export const Investimento: React.FC<Props> = ({ entrada, invest, totFix, totParc
               {fmt(passar)}
             </motion.span>
           </div>
+        </div>
+
+        <div className="resumo-row" style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.08)' }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Poupanca atual (isolado)</span>
+          <span className="val-blue">{fmt(poupanca)}</span>
         </div>
 
         <div className="health-section">

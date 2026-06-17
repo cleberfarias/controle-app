@@ -1,13 +1,19 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.REACT_APP_SUPABASE_URL!;
-const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.REACT_APP_SUPABASE_URL || '';
+const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase: SupabaseClient | null = null;
+
+if (supabaseUrl && supabaseKey) {
+  supabase = createClient(supabaseUrl, supabaseKey);
+}
 
 const ROW_ID = 'default';
 
 export async function loadFromCloud(): Promise<any | null> {
+  if (!supabase) return null;
+
   const { data, error } = await supabase
     .from('finance_data')
     .select('data')
@@ -19,6 +25,8 @@ export async function loadFromCloud(): Promise<any | null> {
 }
 
 export async function saveToCloud(state: any): Promise<void> {
+  if (!supabase) return;
+
   await supabase
     .from('finance_data')
     .upsert({

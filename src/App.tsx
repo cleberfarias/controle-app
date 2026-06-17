@@ -82,7 +82,7 @@ function App() {
           totGast={computed.totGast}
           invest={computed.invest}
           passar={computed.passar}
-          poupanca={state.poupanca}
+          poupancaTotal={computed.poupancaTotal}
           totRec={computed.totRec}
         />
 
@@ -135,6 +135,7 @@ function App() {
                 totFix={computed.totFix}
                 totParc={computed.totParc}
                 poupanca={state.poupanca}
+                poupancaTotal={computed.poupancaTotal}
                 passar={computed.passar}
                 saudePct={computed.saudePct}
               />

@@ -63,7 +63,7 @@ export const ConfigSection: React.FC<Props> = ({ state, updateConfig }) => {
           />
         </div>
         <div className="field-3d">
-          <label>Poupanca pessoal (R$)</label>
+          <label>Poupanca atual (R$)</label>
           <input
             type="number"
             placeholder="2000"
@@ -72,13 +72,13 @@ export const ConfigSection: React.FC<Props> = ({ state, updateConfig }) => {
           />
         </div>
         <div className="field-3d">
-          <label>% Invest. (padrao 30%)</label>
+          <label>Guardar no mes (R$)</label>
           <input
             type="number"
+            placeholder="500"
             min={0}
-            max={100}
-            value={state.pctInvest || 30}
-            onChange={e => updateConfig({ pctInvest: pm(e.target.value) || 30 })}
+            value={state.investimento || ''}
+            onChange={e => updateConfig({ investimento: pm(e.target.value) })}
           />
         </div>
       </div>

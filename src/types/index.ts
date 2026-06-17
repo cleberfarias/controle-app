@@ -33,7 +33,7 @@ export interface AppState {
   beneficio: number;
   comissao: number;
   poupanca: number;
-  pctInvest: number;
+  investimento: number;
   fixas: ContaFixa[];
   parcs: Parcelada[];
   recs: Recebivel[];
