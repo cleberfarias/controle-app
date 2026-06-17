@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { AppState, ContaFixa, Parcelada, Recebivel, FinanciamentoConfig, AmortizacaoExtra } from '../types';
+import { AppState, ContaFixa, Parcelada, Recebivel, FinanciamentoConfig } from '../types';
 import { loadFromCloud, saveToCloud } from '../lib/supabase';
 
 const STORAGE_KEY = 'fcv3';
