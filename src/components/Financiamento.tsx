@@ -1,0 +1,519 @@
+import React, { useState, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  FileText, BarChart3, Table, Calculator, Plus, Trash2, Info,
+  ChevronLeft, ChevronRight, Home, Landmark, TrendingDown, Clock,
+  DollarSign, Shield, PiggyBank, Target,
+} from 'lucide-react';
+import { GlassCard } from './GlassCard';
+import { FinanciamentoConfig, AmortizacaoExtra } from '../types';
+import { fmt } from '../hooks/useFinanceData';
+
+interface ScheduleItem {
+  num: number;
+  dataVenc: string;
+  parcela: number;
+  juros: number;
+  amort: number;
+  seguro: number;
+  taxa: number;
+  total: number;
+  saldoAntes: number;
+  saldoApos: number;
+  status: 'paga' | 'aberta' | 'atrasada';
+}
+
+interface Props {
+  fin: FinanciamentoConfig;
+  finPagas: Record<number, boolean>;
+  finAmorts: AmortizacaoExtra[];
+  updateFin: (partial: Partial<FinanciamentoConfig>) => void;
+  toggleFinPaga: (num: number, checked: boolean) => void;
+  addAmort: () => void;
+  removeAmort: (id: number) => void;
+  updateAmort: (id: number, field: string, value: any) => void;
+}
+
+type SubTab = 'cadastro' | 'resumo' | 'historico' | 'simulador';
+
+const subTabs: { id: SubTab; label: string; icon: React.FC<any> }[] = [
+  { id: 'cadastro', label: 'Cadastro', icon: FileText },
+  { id: 'resumo', label: 'Resumo', icon: BarChart3 },
+  { id: 'historico', label: 'Historico', icon: Table },
+  { id: 'simulador', label: 'Simulador', icon: Calculator },
+];
+
+function gerarSchedule(fin: FinanciamentoConfig, finPagas: Record<number, boolean>, finAmorts: AmortizacaoExtra[]): ScheduleItem[] {
+  if (!fin.valorFinanciado || !fin.prazo || !fin.jurosMensal) return [];
+  const r = fin.jurosMensal / 100;
+  const n = fin.prazo;
+  let saldo = fin.valorFinanciado;
+  const fator = Math.pow(1 + r, n);
+  let currentPmt = saldo * (r * fator) / (fator - 1);
+  const schedule: ScheduleItem[] = [];
+  const [anoIni, mesIni] = (fin.inicio || '2024-09').split('-').map(Number);
+  const amorts = finAmorts.filter(a => a.aposParcela > 0 && a.valor > 0).sort((a, b) => a.aposParcela - b.aposParcela);
+  const hoje = new Date();
+
+  for (let i = 1; i <= n && saldo > 0.01; i++) {
+    const juros = saldo * r;
+    const amort = Math.min(currentPmt, saldo + juros) - juros;
+    const seguro = fin.seguroInicial || 0;
+    const taxa = fin.taxaAdmin || 0;
+    const total = currentPmt + seguro + taxa;
+    const mesAtual = ((mesIni - 1 + (i - 1)) % 12) + 1;
+    const anoAtual = anoIni + Math.floor((mesIni - 1 + (i - 1)) / 12);
+    const dataVenc = anoAtual + '-' + String(mesAtual).padStart(2, '0') + '-02';
+    const saldoAntes = saldo;
+    saldo = Math.max(0, saldo - amort);
+    const dataP = new Date(anoAtual, mesAtual - 1, 2);
+    const isPago = finPagas[i];
+    let status: 'paga' | 'aberta' | 'atrasada' = 'aberta';
+    if (isPago) status = 'paga';
+    else if (dataP < hoje) status = 'atrasada';
+
+    schedule.push({ num: i, dataVenc, parcela: currentPmt, juros, amort, seguro, taxa, total, saldoAntes, saldoApos: saldo, status });
+
+    for (const am of amorts) {
+      if (am.aposParcela === i && saldo > 0.01) {
+        const va = Math.min(am.valor, saldo);
+        saldo = Math.max(0, saldo - va);
+        const restante = n - i;
+        if (am.estrategia === 'parcela' && restante > 0) {
+          const fn = Math.pow(1 + r, restante);
+          currentPmt = saldo * (r * fn) / (fn - 1);
+        }
+      }
+    }
+    if (saldo <= 0.01) break;
+  }
+  return schedule;
+}
+
+export const Financiamento: React.FC<Props> = ({ fin, finPagas, finAmorts, updateFin, toggleFinPaga, addAmort, removeAmort, updateAmort }) => {
+  const [subTab, setSubTab] = useState<SubTab>('cadastro');
+  const [histPage, setHistPage] = useState(0);
+  const [simValor, setSimValor] = useState('');
+  const [simApos, setSimApos] = useState('');
+  const [simOrigem, setSimOrigem] = useState<'proprio' | 'fgts'>('proprio');
+  const [simEstrategia, setSimEstrategia] = useState<'prazo' | 'parcela'>('prazo');
+  const [simResult, setSimResult] = useState<React.ReactNode | null>(null);
+
+  const schedule = useMemo(() => gerarSchedule(fin, finPagas, finAmorts), [fin, finPagas, finAmorts]);
+
+  const pagas = useMemo(() => schedule.filter(p => p.status === 'paga'), [schedule]);
+  const totalPago = pagas.reduce((s, p) => s + p.total, 0);
+  const totalJuros = pagas.reduce((s, p) => s + p.juros, 0);
+  const totalAmort = pagas.reduce((s, p) => s + p.amort, 0);
+  const totalSeg = pagas.reduce((s, p) => s + p.seguro + p.taxa, 0);
+  const ultimaPaga = pagas.length > 0 ? pagas[pagas.length - 1] : null;
+  const saldoAtual = ultimaPaga ? ultimaPaga.saldoApos : fin.valorFinanciado;
+  const restantes = schedule.length - pagas.length;
+  const pctPago = schedule.length > 0 ? Math.round((pagas.length / schedule.length) * 100) : 0;
+
+  const nM = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const ultima = schedule[schedule.length - 1];
+  const prevQuit = ultima ? (() => { const [y, m] = ultima.dataVenc.split('-'); return nM[parseInt(m) - 1] + '/' + y; })() : '-';
+
+  const totalProj = schedule.reduce((s, p) => s + p.total, 0);
+  const totalJurosProj = schedule.reduce((s, p) => s + p.juros, 0);
+  const totalSegProj = schedule.reduce((s, p) => s + p.seguro + p.taxa, 0);
+
+  const perPage = 12;
+  const totalPages = Math.max(1, Math.ceil(schedule.length / perPage));
+  const safePage = Math.min(histPage, totalPages - 1);
+  const pageItems = schedule.slice(safePage * perPage, (safePage + 1) * perPage);
+
+  function simular() {
+    const valor = parseFloat(simValor) || 0;
+    const apos = parseInt(simApos) || 0;
+    if (!valor || !apos) {
+      setSimResult(<p className="val-red" style={{ marginTop: 12 }}>Preencha o valor e o numero da parcela.</p>);
+      return;
+    }
+    const r = fin.jurosMensal / 100;
+    const n = fin.prazo;
+    const fator = Math.pow(1 + r, n);
+    const pmtOrig = fin.valorFinanciado * (r * fator) / (fator - 1);
+    let saldo = fin.valorFinanciado;
+    for (let i = 1; i <= apos && saldo > 0; i++) saldo -= (pmtOrig - saldo * r);
+    const saldoAntes = saldo;
+    const restAntes = n - apos;
+    const totalSem = restAntes * (pmtOrig + (fin.seguroInicial || 0) + (fin.taxaAdmin || 0));
+    const novoSaldo = Math.max(0, saldo - valor);
+
+    if (simEstrategia === 'prazo') {
+      let novoPrazo = 0;
+      if (pmtOrig > novoSaldo * r) novoPrazo = Math.ceil(-Math.log(1 - (novoSaldo * r) / pmtOrig) / Math.log(1 + r));
+      const mesesEcon = restAntes - novoPrazo;
+      const totalCom = novoPrazo * (pmtOrig + (fin.seguroInicial || 0) + (fin.taxaAdmin || 0)) + valor;
+      const jurosEcon = Math.max(0, totalSem - totalCom);
+      setSimResult(
+        <GlassCard delay={0} hover3d={false} className="sim-result-card">
+          <div className="section-header"><div className="section-title"><Target size={18} /> Resultado — Reduzir Prazo</div></div>
+          <div className="resumo-table">
+            <div className="resumo-row"><span>Saldo antes</span><span style={{ fontWeight: 600 }}>{fmt(saldoAntes)}</span></div>
+            <div className="resumo-row"><span>Valor amortizado</span><span className="val-green">{fmt(valor)}</span></div>
+            <div className="resumo-row"><span>Novo saldo devedor</span><span style={{ fontWeight: 600 }}>{fmt(novoSaldo)}</span></div>
+            <div className="resumo-row"><span>Parcela mantida</span><span>{fmt(pmtOrig)}</span></div>
+            <div className="resumo-row"><span>Prazo restante antes</span><span>{restAntes} meses ({(restAntes / 12).toFixed(1)} anos)</span></div>
+            <div className="resumo-row"><span>Novo prazo restante</span><span className="val-green">{novoPrazo} meses ({(novoPrazo / 12).toFixed(1)} anos)</span></div>
+            <div className="resumo-row"><span>Meses economizados</span><span className="val-green">{mesesEcon} meses ({(mesesEcon / 12).toFixed(1)} anos)</span></div>
+            <div className="resumo-row resumo-total"><span>Economia em juros (est.)</span><span className="val-green total-big">{fmt(jurosEcon)}</span></div>
+          </div>
+        </GlassCard>
+      );
+    } else {
+      const fn = Math.pow(1 + r, restAntes);
+      const novoPmt = novoSaldo * (r * fn) / (fn - 1);
+      const reducao = pmtOrig - novoPmt;
+      const totalCom = restAntes * (novoPmt + (fin.seguroInicial || 0) + (fin.taxaAdmin || 0)) + valor;
+      const jurosEcon = Math.max(0, totalSem - totalCom);
+      setSimResult(
+        <GlassCard delay={0} hover3d={false} className="sim-result-card">
+          <div className="section-header"><div className="section-title"><Target size={18} /> Resultado — Reduzir Parcela</div></div>
+          <div className="resumo-table">
+            <div className="resumo-row"><span>Saldo antes</span><span style={{ fontWeight: 600 }}>{fmt(saldoAntes)}</span></div>
+            <div className="resumo-row"><span>Valor amortizado</span><span className="val-green">{fmt(valor)}</span></div>
+            <div className="resumo-row"><span>Novo saldo devedor</span><span style={{ fontWeight: 600 }}>{fmt(novoSaldo)}</span></div>
+            <div className="resumo-row"><span>Parcela antes</span><span>{fmt(pmtOrig)}</span></div>
+            <div className="resumo-row"><span>Nova parcela</span><span className="val-green">{fmt(novoPmt)}</span></div>
+            <div className="resumo-row"><span>Reducao mensal</span><span className="val-green">{fmt(reducao)}</span></div>
+            <div className="resumo-row"><span>Prazo mantido</span><span>{restAntes} meses</span></div>
+            <div className="resumo-row resumo-total"><span>Economia em juros (est.)</span><span className="val-green total-big">{fmt(jurosEcon)}</span></div>
+          </div>
+        </GlassCard>
+      );
+    }
+  }
+
+  return (
+    <div>
+      {/* Sub-tab bar */}
+      <div className="fin-subtab-bar">
+        {subTabs.map(tab => (
+          <motion.button
+            key={tab.id}
+            className={`fin-subtab ${subTab === tab.id ? 'active' : ''}`}
+            onClick={() => setSubTab(tab.id)}
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.97 }}
+          >
+            <tab.icon size={14} />
+            <span>{tab.label}</span>
+          </motion.button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={subTab}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.25 }}
+        >
+
+          {/* ─── CADASTRO ─── */}
+          {subTab === 'cadastro' && (
+            <div>
+              <GlassCard delay={0.1} hover3d={false}>
+                <div className="section-header">
+                  <div className="section-title"><Landmark size={18} /> Dados do contrato</div>
+                </div>
+                <div className="config-grid">
+                  <div className="field-3d">
+                    <label>Banco</label>
+                    <input value={fin.banco} onChange={e => updateFin({ banco: e.target.value })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Tipo</label>
+                    <input value={fin.tipo} onChange={e => updateFin({ tipo: e.target.value })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Sistema</label>
+                    <select value={fin.sistema} onChange={e => updateFin({ sistema: e.target.value as any })}>
+                      <option value="PRICE">PRICE</option>
+                      <option value="SAC">SAC</option>
+                    </select>
+                  </div>
+                  <div className="field-3d">
+                    <label>Valor financiado (R$)</label>
+                    <input type="number" value={fin.valorFinanciado || ''} step="0.01" onChange={e => updateFin({ valorFinanciado: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Prazo (meses)</label>
+                    <input type="number" value={fin.prazo || ''} min="1" onChange={e => updateFin({ prazo: parseInt(e.target.value) || 0 })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>1a parcela (mes/ano)</label>
+                    <input type="month" value={fin.inicio} onChange={e => updateFin({ inicio: e.target.value })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Juros nominal (% a.a.)</label>
+                    <input type="number" value={fin.jurosAnual || ''} step="0.01" onChange={e => updateFin({ jurosAnual: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Juros mensal (% a.m.)</label>
+                    <input type="number" value={fin.jurosMensal || ''} step="0.0001" onChange={e => updateFin({ jurosMensal: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Parcela inicial (R$)</label>
+                    <input type="number" value={fin.parcelaInicial || ''} step="0.01" onChange={e => updateFin({ parcelaInicial: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Seguro inicial (R$)</label>
+                    <input type="number" value={fin.seguroInicial || ''} step="0.01" onChange={e => updateFin({ seguroInicial: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Taxa administrativa (R$)</label>
+                    <input type="number" value={fin.taxaAdmin || ''} step="0.01" onChange={e => updateFin({ taxaAdmin: parseFloat(e.target.value) || 0 })} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Indice de correcao</label>
+                    <select value={fin.indiceCorrecao} onChange={e => updateFin({ indiceCorrecao: e.target.value as any })}>
+                      <option value="TR">TR</option>
+                      <option value="IPCA">IPCA</option>
+                      <option value="Nenhum">Nenhum</option>
+                    </select>
+                  </div>
+                </div>
+              </GlassCard>
+
+              <GlassCard delay={0.2} hover3d={false} style={{ marginTop: 16 }}>
+                <div className="section-header">
+                  <div className="section-title"><Info size={18} /> Regras do financiamento PRICE</div>
+                </div>
+                <div className="fin-rules">
+                  <p>A parcela PRICE amortiza desde a 1a parcela — no inicio paga-se mais juros e menos amortizacao.</p>
+                  <p>Com o tempo, a amortizacao cresce e os juros diminuem dentro da mesma parcela.</p>
+                  <p>O saldo devedor pode ser atualizado pela TR (Taxa Referencial).</p>
+                  <p>Seguro (MIP/DFI) e taxa administrativa <strong>nao reduzem</strong> a divida.</p>
+                  <p>FGTS pode ser usado para amortizar conforme regras da Caixa (a cada 2 anos).</p>
+                  <p>Atraso pode gerar multa de 2%, juros de mora e risco de execucao do contrato.</p>
+                  <p>Em alienacao fiduciaria, atraso grave pode levar o imovel a leilao.</p>
+                </div>
+              </GlassCard>
+            </div>
+          )}
+
+          {/* ─── RESUMO ─── */}
+          {subTab === 'resumo' && (
+            <div>
+              <div className="fin-summary-grid">
+                {[
+                  { label: 'Saldo devedor atual', value: fmt(saldoAtual), color: '#ef4444', icon: TrendingDown },
+                  { label: 'Total ja pago', value: fmt(totalPago), color: '#10b981', icon: DollarSign },
+                  { label: 'Total em juros', value: fmt(totalJuros), color: '#ef4444', icon: TrendingDown },
+                  { label: 'Total amortizado', value: fmt(totalAmort), color: '#6366f1', icon: Target },
+                  { label: 'Seguro + Taxas', value: fmt(totalSeg), color: '#f59e0b', icon: Shield },
+                  { label: 'Parcelas pagas', value: `${pagas.length} / ${schedule.length}`, color: '#10b981', icon: Clock },
+                  { label: 'Parcelas restantes', value: `${restantes}`, color: '#f59e0b', icon: Clock },
+                  { label: 'Previsao quitacao', value: prevQuit, color: '#6366f1', icon: Home },
+                ].map((card, i) => (
+                  <GlassCard key={card.label} delay={0.05 * i} className="summary-card">
+                    <div className="summary-icon-wrap" style={{ background: `${card.color}18` }}>
+                      <card.icon size={22} color={card.color} />
+                    </div>
+                    <div className="summary-label">{card.label}</div>
+                    <div className="summary-value" style={{ color: card.color }}>{card.value}</div>
+                  </GlassCard>
+                ))}
+              </div>
+
+              <GlassCard delay={0.3} hover3d={false} style={{ maxWidth: 560 }}>
+                <div className="section-header">
+                  <div className="section-title"><BarChart3 size={18} /> Progresso do financiamento</div>
+                </div>
+                <div className="health-section" style={{ marginTop: 0 }}>
+                  <div className="health-header">
+                    <span>Amortizado</span>
+                    <motion.span key={pctPago} initial={{ scale: 1.3 }} animate={{ scale: 1 }} style={{ fontWeight: 600, color: '#6366f1' }}>
+                      {pctPago}%
+                    </motion.span>
+                  </div>
+                  <div className="health-bar-bg">
+                    <motion.div
+                      className="health-bar-fill"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${pctPago}%` }}
+                      transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+                      style={{ background: 'linear-gradient(90deg, #6366f1, #8b5cf6)' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="resumo-table" style={{ marginTop: 20 }}>
+                  <div className="resumo-row"><span>Valor financiado</span><span style={{ fontWeight: 600 }}>{fmt(fin.valorFinanciado)}</span></div>
+                  <div className="resumo-row"><span>Total que pagara (projecao)</span><span className="val-red">{fmt(totalProj)}</span></div>
+                  <div className="resumo-row"><span>Custo total dos juros</span><span className="val-red">{fmt(totalJurosProj)}</span></div>
+                  <div className="resumo-row"><span>Custo total seguro + taxas</span><span className="val-amber">{fmt(totalSegProj)}</span></div>
+                </div>
+              </GlassCard>
+            </div>
+          )}
+
+          {/* ─── HISTORICO ─── */}
+          {subTab === 'historico' && (
+            <GlassCard delay={0.1} hover3d={false}>
+              <div className="section-header">
+                <div className="section-title"><Table size={18} /> Historico de parcelas</div>
+              </div>
+              <div className="fin-hist-nav">
+                <motion.button className="btn-nav" onClick={() => setHistPage(p => Math.max(0, p - 1))} whileTap={{ scale: 0.9 }}>
+                  <ChevronLeft size={16} />
+                </motion.button>
+                <span className="fin-hist-label">
+                  Parcelas {safePage * perPage + 1}–{Math.min((safePage + 1) * perPage, schedule.length)} de {schedule.length}
+                </span>
+                <motion.button className="btn-nav" onClick={() => setHistPage(p => Math.min(totalPages - 1, p + 1))} whileTap={{ scale: 0.9 }}>
+                  <ChevronRight size={16} />
+                </motion.button>
+                <select
+                  className="fin-hist-select"
+                  value={safePage}
+                  onChange={e => setHistPage(parseInt(e.target.value))}
+                >
+                  {Array.from({ length: totalPages }, (_, i) => (
+                    <option key={i} value={i}>Ano {i + 1} ({i * perPage + 1}–{Math.min((i + 1) * perPage, schedule.length)})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>N</th><th>Vencimento</th><th>Total</th><th>Juros</th><th>Amortiz.</th>
+                      <th>Seguro</th><th>Taxa</th><th>Saldo apos</th><th>Status</th><th>Pago?</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageItems.map(p => {
+                      const [y, m, d] = p.dataVenc.split('-');
+                      const statusCls = p.status === 'paga' ? 'val-green' : p.status === 'atrasada' ? 'val-red' : '';
+                      const statusLabel = p.status === 'paga' ? 'Paga' : p.status === 'atrasada' ? 'Atrasada' : 'Aberta';
+                      return (
+                        <tr key={p.num} className={p.status === 'paga' ? 'row-paid' : ''}>
+                          <td>{p.num}</td>
+                          <td>{d}/{m}/{y}</td>
+                          <td>{fmt(p.total)}</td>
+                          <td>{fmt(p.juros)}</td>
+                          <td>{fmt(p.amort)}</td>
+                          <td>{fmt(p.seguro)}</td>
+                          <td>{fmt(p.taxa)}</td>
+                          <td>{fmt(p.saldoApos)}</td>
+                          <td><span className={statusCls} style={{ fontWeight: 500, fontSize: 11, textTransform: 'uppercase' }}>{statusLabel}</span></td>
+                          <td>
+                            <label className="checkbox-3d">
+                              <input type="checkbox" checked={p.status === 'paga'} onChange={e => toggleFinPaga(p.num, e.target.checked)} />
+                              <span className="checkmark" />
+                            </label>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {schedule.length === 0 && (
+                <div className="empty-state"><Table size={32} /><p>Preencha os dados do contrato na aba Cadastro.</p></div>
+              )}
+            </GlassCard>
+          )}
+
+          {/* ─── SIMULADOR ─── */}
+          {subTab === 'simulador' && (
+            <div>
+              <GlassCard delay={0.1} hover3d={false}>
+                <div className="section-header">
+                  <div className="section-title"><Calculator size={18} /> Simulador de amortizacao extra</div>
+                </div>
+                <p className="hint-text">
+                  Simule o impacto de uma amortizacao extra. Escolha entre reduzir o prazo (mantendo a parcela) ou reduzir a parcela (mantendo o prazo).
+                </p>
+                <div className="config-grid" style={{ marginBottom: 16 }}>
+                  <div className="field-3d">
+                    <label>Valor da amortizacao (R$)</label>
+                    <input type="number" value={simValor} step="0.01" placeholder="10000" onChange={e => setSimValor(e.target.value)} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Apos parcela n</label>
+                    <input type="number" value={simApos} min="1" placeholder="22" onChange={e => setSimApos(e.target.value)} />
+                  </div>
+                  <div className="field-3d">
+                    <label>Origem</label>
+                    <select value={simOrigem} onChange={e => setSimOrigem(e.target.value as any)}>
+                      <option value="proprio">Dinheiro proprio</option>
+                      <option value="fgts">FGTS</option>
+                    </select>
+                  </div>
+                  <div className="field-3d">
+                    <label>Estrategia</label>
+                    <select value={simEstrategia} onChange={e => setSimEstrategia(e.target.value as any)}>
+                      <option value="prazo">Reduzir prazo</option>
+                      <option value="parcela">Reduzir parcela</option>
+                    </select>
+                  </div>
+                </div>
+                <motion.button className="btn-add-3d" onClick={simular} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                  <Calculator size={16} /> Simular
+                </motion.button>
+                {simResult && <div style={{ marginTop: 16 }}>{simResult}</div>}
+              </GlassCard>
+
+              <GlassCard delay={0.2} hover3d={false} style={{ marginTop: 16 }}>
+                <div className="section-header">
+                  <div className="section-title">
+                    <PiggyBank size={18} /> Amortizacoes registradas
+                    <span className="badge-3d">{finAmorts.length}</span>
+                  </div>
+                  <motion.button className="btn-add-3d" onClick={addAmort} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                    <Plus size={16} /> Registrar
+                  </motion.button>
+                </div>
+                <p className="hint-text">Amortizacoes registradas afetam o calculo do historico e do resumo.</p>
+                {finAmorts.length > 0 ? (
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr><th>Data</th><th>Valor (R$)</th><th>Origem</th><th>Estrategia</th><th>Apos parcela</th><th></th></tr>
+                      </thead>
+                      <tbody>
+                        {finAmorts.map(a => (
+                          <tr key={a.id}>
+                            <td><input value={a.data} placeholder="01/2025" onChange={e => updateAmort(a.id, 'data', e.target.value)} /></td>
+                            <td><input type="number" value={a.valor || ''} placeholder="10000" min="0" step="0.01" onChange={e => updateAmort(a.id, 'valor', parseFloat(e.target.value) || 0)} /></td>
+                            <td>
+                              <select value={a.origem} onChange={e => updateAmort(a.id, 'origem', e.target.value)}>
+                                <option value="proprio">Proprio</option>
+                                <option value="fgts">FGTS</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select value={a.estrategia} onChange={e => updateAmort(a.id, 'estrategia', e.target.value)}>
+                                <option value="prazo">Reduzir prazo</option>
+                                <option value="parcela">Reduzir parcela</option>
+                              </select>
+                            </td>
+                            <td><input type="number" value={a.aposParcela || ''} placeholder="N" min="1" step="1" onChange={e => updateAmort(a.id, 'aposParcela', parseInt(e.target.value) || 0)} /></td>
+                            <td>
+                              <motion.button className="btn-del-3d" onClick={() => removeAmort(a.id)} whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}>
+                                <Trash2 size={14} />
+                              </motion.button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="empty-state"><PiggyBank size={32} /><p>Nenhuma amortizacao extra registrada.</p></div>
+                )}
+              </GlassCard>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+};

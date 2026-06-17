@@ -1,8 +1,8 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ListChecks, CreditCard, Inbox, TrendingUp, FileBarChart } from 'lucide-react';
+import { ListChecks, CreditCard, Inbox, TrendingUp, FileBarChart, Home } from 'lucide-react';
 
-export type TabId = 'fixas' | 'parc' | 'rec' | 'inv' | 'rel';
+export type TabId = 'fixas' | 'parc' | 'rec' | 'inv' | 'fin' | 'rel';
 
 interface Props {
   activeTab: TabId;
@@ -14,6 +14,7 @@ const tabs: { id: TabId; label: string; icon: React.FC<any> }[] = [
   { id: 'parc', label: 'Parceladas', icon: CreditCard },
   { id: 'rec', label: 'A receber', icon: Inbox },
   { id: 'inv', label: 'Investimento', icon: TrendingUp },
+  { id: 'fin', label: 'Financiamento', icon: Home },
   { id: 'rel', label: 'Relatorio', icon: FileBarChart },
 ];
 

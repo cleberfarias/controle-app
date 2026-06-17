@@ -27,6 +27,30 @@ export interface Recebivel {
   recebidoMes: Record<string, boolean>;
 }
 
+export interface FinanciamentoConfig {
+  banco: string;
+  tipo: string;
+  sistema: 'PRICE' | 'SAC';
+  valorFinanciado: number;
+  prazo: number;
+  inicio: string;
+  jurosAnual: number;
+  jurosMensal: number;
+  parcelaInicial: number;
+  seguroInicial: number;
+  taxaAdmin: number;
+  indiceCorrecao: 'TR' | 'IPCA' | 'Nenhum';
+}
+
+export interface AmortizacaoExtra {
+  id: number;
+  data: string;
+  valor: number;
+  origem: 'proprio' | 'fgts';
+  estrategia: 'prazo' | 'parcela';
+  aposParcela: number;
+}
+
 export interface AppState {
   mes: string;
   salario: number;
@@ -37,4 +61,7 @@ export interface AppState {
   fixas: ContaFixa[];
   parcs: Parcelada[];
   recs: Recebivel[];
+  fin: FinanciamentoConfig;
+  finPagas: Record<number, boolean>;
+  finAmorts: AmortizacaoExtra[];
 }

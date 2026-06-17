@@ -1039,3 +1039,144 @@ tfoot td {
     padding: 12px;
   }
 }
+
+/* ═══════════════════════ FINANCIAMENTO ═══════════════════════ */
+
+.fin-subtab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 4px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+}
+
+.fin-subtab {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.fin-subtab:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.04);
+}
+
+.fin-subtab.active {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(139,92,246,0.15));
+  box-shadow: 0 2px 10px rgba(99,102,241,0.12), inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.fin-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.fin-rules {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 2;
+}
+
+.fin-rules p::before {
+  content: '\2022';
+  margin-right: 8px;
+  color: var(--accent-blue);
+}
+
+.fin-hist-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  position: relative;
+  z-index: 1;
+  flex-wrap: wrap;
+}
+
+.fin-hist-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  min-width: 200px;
+  text-align: center;
+}
+
+.btn-nav {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.btn-nav:hover {
+  background: rgba(255,255,255,0.08);
+  border-color: var(--accent-blue);
+}
+
+.fin-hist-select {
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: 'Inter', sans-serif;
+  cursor: pointer;
+}
+
+.sim-result-card {
+  margin-top: 0 !important;
+}
+
+@media (max-width: 640px) {
+  .fin-subtab-bar {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .fin-subtab {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .fin-subtab span {
+    display: none;
+  }
+
+  .fin-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .fin-hist-nav {
+    gap: 6px;
+  }
+
+  .fin-hist-label {
+    min-width: auto;
+    font-size: 11px;
+  }
+}

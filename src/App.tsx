@@ -10,6 +10,7 @@ import { Parceladas } from './components/Parceladas';
 import { Recebiveis } from './components/Recebiveis';
 import { Investimento } from './components/Investimento';
 import { Relatorio } from './components/Relatorio';
+import { Financiamento } from './components/Financiamento';
 import './App.css';
 
 const MONTH_NAMES = [
@@ -29,6 +30,7 @@ function App() {
     addFixa, removeFixa, updateFixa, toggleFixaPago,
     addParc, removeParc, updateParc, toggleParcPago,
     addRec, removeRec, updateRec, toggleRecRecebido,
+    updateFin, toggleFinPaga, addAmort, removeAmort, updateAmort,
     computed,
   } = useFinanceData();
 
@@ -138,6 +140,18 @@ function App() {
                 poupancaTotal={computed.poupancaTotal}
                 passar={computed.passar}
                 saudePct={computed.saudePct}
+              />
+            )}
+            {activeTab === 'fin' && (
+              <Financiamento
+                fin={state.fin}
+                finPagas={state.finPagas}
+                finAmorts={state.finAmorts}
+                updateFin={updateFin}
+                toggleFinPaga={toggleFinPaga}
+                addAmort={addAmort}
+                removeAmort={removeAmort}
+                updateAmort={updateAmort}
               />
             )}
             {activeTab === 'rel' && (

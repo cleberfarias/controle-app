@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { AppState, ContaFixa, Parcelada, Recebivel } from '../types';
+import { AppState, ContaFixa, Parcelada, Recebivel, FinanciamentoConfig, AmortizacaoExtra } from '../types';
 import { loadFromCloud, saveToCloud } from '../lib/supabase';
 
 const STORAGE_KEY = 'fcv3';
@@ -8,6 +8,21 @@ function currentMonth(): string {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 }
+
+const FIN_DEFAULT: FinanciamentoConfig = {
+  banco: 'Caixa',
+  tipo: 'Minha Casa Minha Vida',
+  sistema: 'PRICE',
+  valorFinanciado: 237700,
+  prazo: 420,
+  inicio: '2024-09',
+  jurosAnual: 7.66,
+  jurosMensal: 0.6383,
+  parcelaInicial: 1629.91,
+  seguroInicial: 43.13,
+  taxaAdmin: 25,
+  indiceCorrecao: 'TR',
+};
 
 const defaultState: AppState = {
   mes: '',
@@ -19,6 +34,9 @@ const defaultState: AppState = {
   fixas: [],
   parcs: [],
   recs: [],
+  fin: { ...FIN_DEFAULT },
+  finPagas: {},
+  finAmorts: [],
 };
 
 function migrateState(raw: any): AppState {
@@ -56,6 +74,10 @@ function migrateState(raw: any): AppState {
     s.investimento = 0;
   }
   delete s.pctInvest;
+
+  if (!s.fin) s.fin = { ...FIN_DEFAULT };
+  if (!s.finPagas) s.finPagas = {};
+  if (!s.finAmorts) s.finAmorts = [];
 
   return s as AppState;
 }
@@ -274,6 +296,36 @@ export function useFinanceData() {
     });
   }, []);
 
+  const updateFin = useCallback((partial: Partial<FinanciamentoConfig>) => {
+    setState(prev => ({ ...prev, fin: { ...prev.fin, ...partial } }));
+  }, []);
+
+  const toggleFinPaga = useCallback((num: number, checked: boolean) => {
+    setState(prev => {
+      const next = { ...prev.finPagas };
+      if (checked) next[num] = true; else delete next[num];
+      return { ...prev, finPagas: next };
+    });
+  }, []);
+
+  const addAmort = useCallback(() => {
+    setState(prev => ({
+      ...prev,
+      finAmorts: [...prev.finAmorts, { id: Date.now(), data: '', valor: 0, origem: 'proprio' as const, estrategia: 'prazo' as const, aposParcela: 0 }],
+    }));
+  }, []);
+
+  const removeAmort = useCallback((id: number) => {
+    setState(prev => ({ ...prev, finAmorts: prev.finAmorts.filter(a => a.id !== id) }));
+  }, []);
+
+  const updateAmort = useCallback((id: number, field: string, value: any) => {
+    setState(prev => ({
+      ...prev,
+      finAmorts: prev.finAmorts.map(a => a.id === id ? { ...a, [field]: value } : a),
+    }));
+  }, []);
+
   const entrada = state.salario + state.beneficio + state.comissao;
   const invest = state.investimento;
   const totFix = state.fixas.reduce((s, c) => s + c.valor, 0);
@@ -292,6 +344,7 @@ export function useFinanceData() {
     addFixa, removeFixa, updateFixa, toggleFixaPago,
     addParc, removeParc, updateParc, toggleParcPago,
     addRec, removeRec, updateRec, toggleRecRecebido,
+    updateFin, toggleFinPaga, addAmort, removeAmort, updateAmort,
     computed: { entrada, invest, totFix, totParc, totGast, passar, totRec, poupancaTotal, saudePct },
   };
 }
