@@ -175,7 +175,6 @@ export const Financiamento: React.FC<Props> = ({ fin, finPagas, finAmorts, updat
       let saldo = saldoAntes;
       let meses = 0;
       let totalJurosCom = 0;
-      let totalPagoCom = 0;
 
       while (saldo > 0.01 && meses < restAntes + 500) {
         const juros = saldo * r;
@@ -184,7 +183,6 @@ export const Financiamento: React.FC<Props> = ({ fin, finPagas, finAmorts, updat
         const amortExtra = Math.min(valor, saldo);
         saldo -= amortExtra;
         totalJurosCom += juros;
-        totalPagoCom += pmtOrig + amortExtra + segTaxa;
         meses++;
       }
 
