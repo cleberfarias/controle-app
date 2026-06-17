@@ -96,6 +96,7 @@ export const Financiamento: React.FC<Props> = ({ fin, finPagas, finAmorts, updat
   const [simValor, setSimValor] = useState('');
   const [simOrigem, setSimOrigem] = useState<'proprio' | 'fgts'>('proprio');
   const [simEstrategia, setSimEstrategia] = useState<'prazo' | 'parcela'>('prazo');
+  const [simFreq, setSimFreq] = useState<'unico' | 'mensal'>('mensal');
   const [simResult, setSimResult] = useState<React.ReactNode | null>(null);
 
   const schedule = useMemo(() => gerarSchedule(fin, finPagas, finAmorts), [fin, finPagas, finAmorts]);
@@ -157,57 +158,134 @@ export const Financiamento: React.FC<Props> = ({ fin, finPagas, finAmorts, updat
     const n = fin.prazo;
     const fator = Math.pow(1 + r, n);
     const pmtOrig = fin.valorFinanciado * (r * fator) / (fator - 1);
-    let saldo = fin.valorFinanciado;
-    for (let i = 1; i <= parcelaAtual && saldo > 0; i++) saldo -= (pmtOrig - saldo * r);
-    const saldoAntes = saldo;
-    const restAntes = n - parcelaAtual;
-    const totalSem = restAntes * (pmtOrig + (fin.seguroInicial || 0) + (fin.taxaAdmin || 0));
-    const novoSaldo = Math.max(0, saldo - valor);
+    const segTaxa = (fin.seguroInicial || 0) + (fin.taxaAdmin || 0);
 
-    if (simEstrategia === 'prazo') {
-      let novoPrazo = 0;
-      if (pmtOrig > novoSaldo * r) novoPrazo = Math.ceil(-Math.log(1 - (novoSaldo * r) / pmtOrig) / Math.log(1 + r));
-      const mesesEcon = restAntes - novoPrazo;
-      const totalCom = novoPrazo * (pmtOrig + (fin.seguroInicial || 0) + (fin.taxaAdmin || 0)) + valor;
-      const jurosEcon = Math.max(0, totalSem - totalCom);
+    // Calcula saldo na parcela atual
+    let saldoInicio = fin.valorFinanciado;
+    for (let i = 1; i <= parcelaAtual && saldoInicio > 0; i++) saldoInicio -= (pmtOrig - saldoInicio * r);
+    const saldoAntes = saldoInicio;
+    const restAntes = n - parcelaAtual;
+
+    // === CENARIO SEM AMORTIZAR: total que pagaria normalmente ===
+    const totalSem = restAntes * (pmtOrig + segTaxa);
+
+    if (simFreq === 'mensal') {
+      // ── PAGAMENTO EXTRA TODO MES ──
+      // Simula mes a mes: paga PMT normal + extra, ate quitar
+      let saldo = saldoAntes;
+      let meses = 0;
+      let totalJurosCom = 0;
+      let totalPagoCom = 0;
+
+      while (saldo > 0.01 && meses < restAntes + 500) {
+        const juros = saldo * r;
+        const amortNormal = Math.min(pmtOrig - juros, saldo);
+        saldo -= amortNormal;
+        const amortExtra = Math.min(valor, saldo);
+        saldo -= amortExtra;
+        totalJurosCom += juros;
+        totalPagoCom += pmtOrig + amortExtra + segTaxa;
+        meses++;
+      }
+
+      // Cenario sem amortizar (mes a mes tambem, para juros exatos)
+      let saldoSem = saldoAntes;
+      let mesesSem = 0;
+      let totalJurosSem = 0;
+      while (saldoSem > 0.01 && mesesSem < restAntes + 100) {
+        const juros = saldoSem * r;
+        const amort = Math.min(pmtOrig - juros, saldoSem);
+        saldoSem -= amort;
+        totalJurosSem += juros;
+        mesesSem++;
+      }
+
+      const mesesEcon = mesesSem - meses;
+      const jurosEcon = Math.max(0, totalJurosSem - totalJurosCom);
+      const totalExtroPago = meses * valor;
+
+      // Data de quitacao estimada
+      const [anoIni, mesIni] = (fin.inicio || '2024-09').split('-').map(Number);
+      const mesQuit = ((mesIni - 1 + parcelaAtual + meses - 1) % 12) + 1;
+      const anoQuit = anoIni + Math.floor((mesIni - 1 + parcelaAtual + meses - 1) / 12);
+      const nMeses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      const dataQuit = nMeses[mesQuit - 1] + '/' + anoQuit;
+
+      const mesQuitSem = ((mesIni - 1 + parcelaAtual + mesesSem - 1) % 12) + 1;
+      const anoQuitSem = anoIni + Math.floor((mesIni - 1 + parcelaAtual + mesesSem - 1) / 12);
+      const dataQuitSem = nMeses[mesQuitSem - 1] + '/' + anoQuitSem;
+
       setSimResult(
         <GlassCard delay={0} hover3d={false} className="sim-result-card">
-          <div className="section-header"><div className="section-title"><Target size={18} /> Resultado — Reduzir Prazo</div></div>
-          <p className="hint-text" style={{ marginBottom: 12 }}>Voce paga a parcela normal + R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} extra. A parcela continua igual, mas quita antes.</p>
+          <div className="section-header"><div className="section-title"><Target size={18} /> Resultado — {fmt(valor)}/mes extra</div></div>
+          <p className="hint-text" style={{ marginBottom: 12 }}>
+            Pagando {fmt(pmtOrig)} (parcela) + {fmt(valor)} (extra) = <strong style={{ color: 'var(--text-primary)' }}>{fmt(pmtOrig + valor)}/mes</strong>
+          </p>
           <div className="resumo-table">
-            <div className="resumo-row"><span>Seu saldo devedor hoje</span><span style={{ fontWeight: 600 }}>{fmt(saldoAntes)}</span></div>
-            <div className="resumo-row"><span>Valor extra amortizado</span><span className="val-green">{fmt(valor)}</span></div>
-            <div className="resumo-row"><span>Novo saldo devedor</span><span style={{ fontWeight: 600 }}>{fmt(novoSaldo)}</span></div>
-            <div className="resumo-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12, marginTop: 4 }}><span>Parcela mensal (mantida)</span><span>{fmt(pmtOrig)}</span></div>
-            <div className="resumo-row"><span>Prazo restante sem amortizar</span><span>{restAntes} meses ({(restAntes / 12).toFixed(1)} anos)</span></div>
-            <div className="resumo-row"><span>Novo prazo restante</span><span className="val-green">{novoPrazo} meses ({(novoPrazo / 12).toFixed(1)} anos)</span></div>
+            <div className="resumo-row"><span>Saldo devedor hoje</span><span style={{ fontWeight: 600 }}>{fmt(saldoAntes)}</span></div>
+            <div className="resumo-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12, marginTop: 4 }}>
+              <span>Sem amortizar, quita em</span><span>{mesesSem} meses ({(mesesSem / 12).toFixed(1)} anos) — {dataQuitSem}</span>
+            </div>
+            <div className="resumo-row">
+              <span>Com {fmt(valor)}/mes extra, quita em</span>
+              <span className="val-green">{meses} meses ({(meses / 12).toFixed(1)} anos) — {dataQuit}</span>
+            </div>
             <div className="resumo-row"><span>Meses que voce economiza</span><span className="val-green">{mesesEcon} meses ({(mesesEcon / 12).toFixed(1)} anos)</span></div>
+            <div className="resumo-row"><span>Total extra que vai pagar</span><span>{fmt(totalExtroPago)} em {meses} meses</span></div>
             <div className="resumo-row resumo-total"><span>Economia total em juros</span><span className="val-green total-big">{fmt(jurosEcon)}</span></div>
           </div>
         </GlassCard>
       );
+
     } else {
-      const fn = Math.pow(1 + r, restAntes);
-      const novoPmt = novoSaldo * (r * fn) / (fn - 1);
-      const reducao = pmtOrig - novoPmt;
-      const totalCom = restAntes * (novoPmt + (fin.seguroInicial || 0) + (fin.taxaAdmin || 0)) + valor;
-      const jurosEcon = Math.max(0, totalSem - totalCom);
-      setSimResult(
-        <GlassCard delay={0} hover3d={false} className="sim-result-card">
-          <div className="section-header"><div className="section-title"><Target size={18} /> Resultado — Reduzir Parcela</div></div>
-          <p className="hint-text" style={{ marginBottom: 12 }}>Voce paga a parcela normal + R$ {valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} extra. O prazo continua igual, mas a parcela mensal diminui.</p>
-          <div className="resumo-table">
-            <div className="resumo-row"><span>Seu saldo devedor hoje</span><span style={{ fontWeight: 600 }}>{fmt(saldoAntes)}</span></div>
-            <div className="resumo-row"><span>Valor extra amortizado</span><span className="val-green">{fmt(valor)}</span></div>
-            <div className="resumo-row"><span>Novo saldo devedor</span><span style={{ fontWeight: 600 }}>{fmt(novoSaldo)}</span></div>
-            <div className="resumo-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12, marginTop: 4 }}><span>Parcela atual</span><span>{fmt(pmtOrig)}</span></div>
-            <div className="resumo-row"><span>Nova parcela</span><span className="val-green">{fmt(novoPmt)}</span></div>
-            <div className="resumo-row"><span>Voce economiza por mes</span><span className="val-green">{fmt(reducao)}</span></div>
-            <div className="resumo-row"><span>Prazo (mantido)</span><span>{restAntes} meses</span></div>
-            <div className="resumo-row resumo-total"><span>Economia total em juros</span><span className="val-green total-big">{fmt(jurosEcon)}</span></div>
-          </div>
-        </GlassCard>
-      );
+      // ── PAGAMENTO UNICO ──
+      const novoSaldo = Math.max(0, saldoAntes - valor);
+
+      if (simEstrategia === 'prazo') {
+        let novoPrazo = 0;
+        if (pmtOrig > novoSaldo * r) novoPrazo = Math.ceil(-Math.log(1 - (novoSaldo * r) / pmtOrig) / Math.log(1 + r));
+        const mesesEcon = restAntes - novoPrazo;
+        const totalCom = novoPrazo * (pmtOrig + segTaxa) + valor;
+        const jurosEcon = Math.max(0, totalSem - totalCom);
+        setSimResult(
+          <GlassCard delay={0} hover3d={false} className="sim-result-card">
+            <div className="section-header"><div className="section-title"><Target size={18} /> Resultado — Pagamento unico de {fmt(valor)}</div></div>
+            <p className="hint-text" style={{ marginBottom: 12 }}>Voce paga {fmt(valor)} uma vez agora. A parcela continua igual, mas quita antes.</p>
+            <div className="resumo-table">
+              <div className="resumo-row"><span>Saldo devedor hoje</span><span style={{ fontWeight: 600 }}>{fmt(saldoAntes)}</span></div>
+              <div className="resumo-row"><span>Valor amortizado</span><span className="val-green">{fmt(valor)}</span></div>
+              <div className="resumo-row"><span>Novo saldo devedor</span><span style={{ fontWeight: 600 }}>{fmt(novoSaldo)}</span></div>
+              <div className="resumo-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12, marginTop: 4 }}><span>Parcela mensal (mantida)</span><span>{fmt(pmtOrig)}</span></div>
+              <div className="resumo-row"><span>Prazo sem amortizar</span><span>{restAntes} meses ({(restAntes / 12).toFixed(1)} anos)</span></div>
+              <div className="resumo-row"><span>Novo prazo</span><span className="val-green">{novoPrazo} meses ({(novoPrazo / 12).toFixed(1)} anos)</span></div>
+              <div className="resumo-row"><span>Meses economizados</span><span className="val-green">{mesesEcon} meses ({(mesesEcon / 12).toFixed(1)} anos)</span></div>
+              <div className="resumo-row resumo-total"><span>Economia em juros</span><span className="val-green total-big">{fmt(jurosEcon)}</span></div>
+            </div>
+          </GlassCard>
+        );
+      } else {
+        const fn = Math.pow(1 + r, restAntes);
+        const novoPmt = novoSaldo * (r * fn) / (fn - 1);
+        const reducao = pmtOrig - novoPmt;
+        const totalCom = restAntes * (novoPmt + segTaxa) + valor;
+        const jurosEcon = Math.max(0, totalSem - totalCom);
+        setSimResult(
+          <GlassCard delay={0} hover3d={false} className="sim-result-card">
+            <div className="section-header"><div className="section-title"><Target size={18} /> Resultado — Pagamento unico de {fmt(valor)}</div></div>
+            <p className="hint-text" style={{ marginBottom: 12 }}>Voce paga {fmt(valor)} uma vez agora. O prazo continua, mas a parcela mensal diminui.</p>
+            <div className="resumo-table">
+              <div className="resumo-row"><span>Saldo devedor hoje</span><span style={{ fontWeight: 600 }}>{fmt(saldoAntes)}</span></div>
+              <div className="resumo-row"><span>Valor amortizado</span><span className="val-green">{fmt(valor)}</span></div>
+              <div className="resumo-row"><span>Novo saldo devedor</span><span style={{ fontWeight: 600 }}>{fmt(novoSaldo)}</span></div>
+              <div className="resumo-row" style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 12, marginTop: 4 }}><span>Parcela atual</span><span>{fmt(pmtOrig)}</span></div>
+              <div className="resumo-row"><span>Nova parcela</span><span className="val-green">{fmt(novoPmt)}</span></div>
+              <div className="resumo-row"><span>Voce economiza por mes</span><span className="val-green">{fmt(reducao)}</span></div>
+              <div className="resumo-row"><span>Prazo (mantido)</span><span>{restAntes} meses</span></div>
+              <div className="resumo-row resumo-total"><span>Economia em juros</span><span className="val-green total-big">{fmt(jurosEcon)}</span></div>
+            </div>
+          </GlassCard>
+        );
+      }
     }
   }
 
@@ -480,21 +558,30 @@ export const Financiamento: React.FC<Props> = ({ fin, finPagas, finAmorts, updat
 
                 <div className="config-grid" style={{ marginBottom: 16 }}>
                   <div className="field-3d">
-                    <label>Valor extra para amortizar (R$)</label>
+                    <label>Valor extra (R$)</label>
                     <input type="number" value={simValor} step="0.01" placeholder="1000" onChange={e => setSimValor(e.target.value)} />
                   </div>
+                  <div className="field-3d">
+                    <label>Frequencia</label>
+                    <select value={simFreq} onChange={e => setSimFreq(e.target.value as any)}>
+                      <option value="mensal">Todo mes</option>
+                      <option value="unico">Pagamento unico</option>
+                    </select>
+                  </div>
+                  {simFreq === 'unico' && (
+                    <div className="field-3d">
+                      <label>O que voce quer?</label>
+                      <select value={simEstrategia} onChange={e => setSimEstrategia(e.target.value as any)}>
+                        <option value="prazo">Quitar antes (manter parcela)</option>
+                        <option value="parcela">Pagar menos por mes (manter prazo)</option>
+                      </select>
+                    </div>
+                  )}
                   <div className="field-3d">
                     <label>Origem do dinheiro</label>
                     <select value={simOrigem} onChange={e => setSimOrigem(e.target.value as any)}>
                       <option value="proprio">Dinheiro proprio</option>
                       <option value="fgts">FGTS</option>
-                    </select>
-                  </div>
-                  <div className="field-3d">
-                    <label>O que voce quer?</label>
-                    <select value={simEstrategia} onChange={e => setSimEstrategia(e.target.value as any)}>
-                      <option value="prazo">Quitar antes (manter parcela)</option>
-                      <option value="parcela">Pagar menos por mes (manter prazo)</option>
                     </select>
                   </div>
                 </div>
